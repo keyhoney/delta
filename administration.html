@@ -152,12 +152,47 @@
             await updateDoc(ref, payload);
         }
 
-        // 뒤로 미루기
+        // 뒤로 미루기 (한 순서만 뒤로)
         async function bumpToBack(docId, programId) {
-            const ref = doc(db, 'reservations', docId);
-            const payload = {};
-            payload[`programs.${programId}.enqueuedAt`] = serverTimestamp(); // 뒤로 미루기: 정렬키를 현재로 갱신
-            await updateDoc(ref, payload);
+            try {
+                // 현재 대기열 조회
+                const queue = await listProgramQueue(programId);
+                
+                // 현재 항목 찾기
+                const currentIndex = queue.findIndex(item => item.id === docId);
+                if (currentIndex === -1) {
+                    alert('현재 항목을 찾을 수 없습니다.');
+                    return;
+                }
+                
+                // 마지막 항목이면 그대로 유지
+                if (currentIndex === queue.length - 1) {
+                    alert('이미 마지막 순서입니다.');
+                    return;
+                }
+                
+                // 바로 뒤 항목의 시간 가져오기
+                const nextItem = queue[currentIndex + 1];
+                const nextTime = nextItem.programs[programId].enqueuedAt;
+                
+                // 뒤 항목보다 1초 늦은 시간으로 설정
+                let newTime;
+                if (nextTime && nextTime.toMillis) {
+                    newTime = new Date(nextTime.toMillis() + 1000); // 1초 추가
+                } else {
+                    // 타임스탬프가 없는 경우 현재 시간 + 1초
+                    newTime = new Date(Date.now() + 1000);
+                }
+                
+                const ref = doc(db, 'reservations', docId);
+                const payload = {};
+                payload[`programs.${programId}.enqueuedAt`] = newTime;
+                await updateDoc(ref, payload);
+                
+            } catch (error) {
+                console.error('뒤로 미루기 중 오류 발생:', error);
+                alert('뒤로 미루기 중 오류가 발생했습니다.');
+            }
         }
 
         // 프로그램별 렌더링
@@ -173,7 +208,7 @@
                         <td><span class="status-${p.status}">${p.status === 'pending' ? '대기중' : (p.status === 'done' ? '완료' : p.status)}</span></td>
                         <td>
                             <button class="btn btn-secondary" data-act="done" data-id="${r.id}" data-pid="${pid}">체험 완료</button>
-                            <button class="btn btn-secondary" data-act="hold" data-id="${r.id}" data-pid="${pid}">보류(뒤로)</button>
+                            <button class="btn btn-secondary" data-act="hold" data-id="${r.id}" data-pid="${pid}">한 순서 뒤로</button>
                             <button class="btn btn-secondary" data-act="undo" data-id="${r.id}" data-pid="${pid}">완료 취소</button>
                         </td>
                     </tr>
