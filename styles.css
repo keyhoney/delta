@@ -303,6 +303,18 @@ input[type="tel"]:focus {
   background: rgba(255, 255, 255, 0.95);
 }
 
+/* 전화번호 입력 필드 특별 스타일 */
+input[type="tel"] {
+  font-family: var(--font-family-mono);
+  letter-spacing: 0.5px;
+}
+
+input[type="tel"]::placeholder {
+  color: var(--gray-400);
+  font-family: var(--font-family);
+  letter-spacing: normal;
+}
+
 input[type="text"]::placeholder,
 input[type="number"]::placeholder,
 input[type="email"]::placeholder,
@@ -739,6 +751,50 @@ button.ghost:hover {
   .table td {
     border-bottom-color: var(--gray-700);
   }
+}
+
+/* Modal Styles */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-2xl);
+  padding: var(--space-8);
+  max-width: 400px;
+  width: 90%;
+  box-shadow: var(--shadow-2xl);
+  position: relative;
+  overflow: hidden;
+}
+
+.modal-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--primary-200), transparent);
+}
+
+.modal-content h3 {
+  margin-bottom: var(--space-6);
+  text-align: center;
+  color: var(--gray-900);
 }
 
 /* Print styles */

@@ -49,10 +49,10 @@
         <div class="card">
             <h3>2) 연락처</h3>
             <div class="form-group">
-                <label>휴대폰 번호 (하이픈 없이)</label>
-                <input id="phone" type="tel" inputmode="numeric" placeholder="예: 01012345678" />
+                <label>휴대폰 번호</label>
+                <input id="phone" type="tel" inputmode="numeric" placeholder="010-0000-0000" value="010-" />
             </div>
-            <div class="text-small">※ 같은 번호로 재예약하면 가장 최근 예약만 유효합니다.</div>
+            <div class="text-small">※ 같은 번호로 추가 예약은 불가능합니다. 필요시 기존 예약을 취소 후 재예약해주세요.</div>
         </div>
 
         <div class="card">
@@ -95,9 +95,75 @@
             if (!e.target.checked) el('cnt-magnet').value = '1';
         });
 
+        // 전화번호 포맷팅 함수
+        function formatPhoneNumber(phone) {
+            // 숫자만 추출
+            const numbers = phone.replace(/[^0-9]/g, '');
+            
+            // 010으로 시작하지 않으면 010 추가
+            let formatted = numbers;
+            if (!formatted.startsWith('010')) {
+                formatted = '010' + formatted;
+            }
+            
+            // 11자리로 제한
+            formatted = formatted.substring(0, 11);
+            
+            // 하이픈 추가
+            if (formatted.length >= 3) {
+                formatted = formatted.substring(0, 3) + '-' + formatted.substring(3);
+            }
+            if (formatted.length >= 8) {
+                formatted = formatted.substring(0, 8) + '-' + formatted.substring(8);
+            }
+            
+            return formatted;
+        }
+
         // 전화번호 정규화 함수
         function normalizePhone(phone) {
             return phone.replace(/[^0-9]/g, '');
+        }
+
+        // 전화번호 입력 이벤트 처리
+        el('phone').addEventListener('input', (e) => {
+            const input = e.target;
+            const cursorPosition = input.selectionStart;
+            const oldValue = input.value;
+            const oldLength = oldValue.length;
+            
+            // 포맷팅 적용
+            const formatted = formatPhoneNumber(input.value);
+            input.value = formatted;
+            
+            // 커서 위치 조정
+            const newLength = formatted.length;
+            let newPosition = cursorPosition;
+            
+            // 하이픈이 추가된 경우 커서 위치 조정
+            if (newLength > oldLength) {
+                newPosition += newLength - oldLength;
+            } else if (newLength < oldLength) {
+                newPosition -= oldLength - newLength;
+            }
+            
+            input.setSelectionRange(newPosition, newPosition);
+        });
+
+        // 전화번호 입력 필드에서 숫자만 입력 가능하도록
+        el('phone').addEventListener('keypress', (e) => {
+            const char = String.fromCharCode(e.which);
+            if (!/[0-9]/.test(char)) {
+                e.preventDefault();
+            }
+        });
+
+        // 중복 예약 체크 함수
+        async function checkExistingReservation(phone) {
+            const normalizedPhone = normalizePhone(phone);
+            const q = query(RES_COL, where('contact', '==', normalizedPhone));
+            const snap = await getDocs(q);
+            return !snap.empty;
         }
 
         document.getElementById('btn-reserve').addEventListener('click', async () => {
@@ -123,6 +189,13 @@
             if (!/^01\d{8,9}$/.test(phone)) { 
                 alert('휴대폰 번호 형식을 확인해주세요.'); 
                 return; 
+            }
+
+            // 중복 예약 체크
+            const hasExistingReservation = await checkExistingReservation(phone);
+            if (hasExistingReservation) {
+                alert('이미 등록된 연락처입니다.\n\n같은 번호로 추가 예약은 불가능합니다.\n필요시 기존 예약을 취소하고 재예약해주세요.');
+                return;
             }
 
             const payload = {

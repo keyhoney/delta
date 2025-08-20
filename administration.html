@@ -24,38 +24,55 @@
             <div class="description">체험 완료 및 보류 처리를 관리합니다</div>
         </div>
 
-        <div class="row">
-            <div class="card">
-                <h3>비즈 키링</h3>
-                <div class="table-container">
-                    <table class="table" id="table-keyring">
-                        <thead>
-                            <tr>
-                                <th>연락처</th>
-                                <th>인원</th>
-                                <th>상태</th>
-                                <th>작업</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
+        <!-- 비밀번호 입력 모달 -->
+        <div id="passwordModal" class="modal" style="display: block;">
+            <div class="modal-content">
+                <h3>관리자 인증</h3>
+                <div class="form-group">
+                    <label>비밀번호</label>
+                    <input type="password" id="adminPassword" placeholder="비밀번호를 입력하세요" />
+                </div>
+                <button class="btn btn-primary" id="btnLogin">로그인</button>
+                <div id="passwordError" class="text-small" style="color: var(--error-500); margin-top: var(--space-3); display: none;">
+                    비밀번호가 올바르지 않습니다.
                 </div>
             </div>
+        </div>
 
-            <div class="card">
-                <h3>비즈 마그넷</h3>
-                <div class="table-container">
-                    <table class="table" id="table-magnet">
-                        <thead>
-                            <tr>
-                                <th>연락처</th>
-                                <th>인원</th>
-                                <th>상태</th>
-                                <th>작업</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
+        <div id="mainContent" style="display: none;">
+            <div class="row">
+                <div class="card">
+                    <h3>비즈 키링</h3>
+                    <div class="table-container">
+                        <table class="table" id="table-keyring">
+                            <thead>
+                                <tr>
+                                    <th>연락처</th>
+                                    <th>인원</th>
+                                    <th>상태</th>
+                                    <th>작업</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>비즈 마그넷</h3>
+                    <div class="table-container">
+                        <table class="table" id="table-magnet">
+                            <thead>
+                                <tr>
+                                    <th>연락처</th>
+                                    <th>인원</th>
+                                    <th>상태</th>
+                                    <th>작업</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -81,6 +98,37 @@
         const RES_COL = collection(db, 'reservations');
 
         const tbody = pid => document.querySelector(`#table-${pid} tbody`);
+        let isAuthenticated = false;
+
+        // 비밀번호 인증
+        function authenticate(password) {
+            return password === '0000';
+        }
+
+        // 로그인 처리
+        document.getElementById('btnLogin').addEventListener('click', () => {
+            const password = document.getElementById('adminPassword').value;
+            const errorDiv = document.getElementById('passwordError');
+            
+            if (authenticate(password)) {
+                isAuthenticated = true;
+                document.getElementById('passwordModal').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+                refreshAll(); // 데이터 로드 시작
+                startAutoRefresh(); // 자동 새로고침 시작
+            } else {
+                errorDiv.style.display = 'block';
+                document.getElementById('adminPassword').value = '';
+                document.getElementById('adminPassword').focus();
+            }
+        });
+
+        // Enter 키로 로그인
+        document.getElementById('adminPassword').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('btnLogin').click();
+            }
+        });
 
         // 프로그램별 대기열 조회
         async function listProgramQueue(programId) {
@@ -145,6 +193,12 @@
             const btn = e.target.closest('button[data-act]');
             if (!btn) return;
             
+            // 인증 체크
+            if (!isAuthenticated) {
+                alert('관리자 인증이 필요합니다.');
+                return;
+            }
+            
             const act = btn.dataset.act;
             const id = btn.dataset.id;
             const pid = btn.dataset.pid;
@@ -160,9 +214,18 @@
             await refreshAll();
         });
 
-        // 주기적으로 새로고침 (5초)
-        setInterval(refreshAll, 5000);
-        refreshAll();
+        // 주기적으로 새로고침 (5초) - 인증 후에만 시작
+        let refreshInterval;
+        
+        function startAutoRefresh() {
+            refreshInterval = setInterval(refreshAll, 5000);
+        }
+        
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        }
     </script>
 </body>
 </html>

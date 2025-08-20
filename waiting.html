@@ -27,7 +27,7 @@
         <div class="card">
             <div class="form-group">
                 <label>휴대폰 번호</label>
-                <input id="phone" type="tel" inputmode="numeric" placeholder="예: 01012345678" />
+                <input id="phone" type="tel" inputmode="numeric" placeholder="010-0000-0000" value="010-" />
             </div>
             <button class="btn btn-primary" id="btn-check">조회</button>
             <a href="./index.html" style="margin-left: var(--space-3); text-decoration: none;">
@@ -65,12 +65,73 @@
             return url.searchParams.get(name);
         }
         const pre = getParam('phone');
-        if (pre) el('phone').value = pre;
+        if (pre) {
+            // URL 파라미터로 받은 전화번호를 포맷팅하여 설정
+            el('phone').value = formatPhoneNumber(pre);
+        }
+
+        // 전화번호 포맷팅 함수
+        function formatPhoneNumber(phone) {
+            // 숫자만 추출
+            const numbers = phone.replace(/[^0-9]/g, '');
+            
+            // 010으로 시작하지 않으면 010 추가
+            let formatted = numbers;
+            if (!formatted.startsWith('010')) {
+                formatted = '010' + formatted;
+            }
+            
+            // 11자리로 제한
+            formatted = formatted.substring(0, 11);
+            
+            // 하이픈 추가
+            if (formatted.length >= 3) {
+                formatted = formatted.substring(0, 3) + '-' + formatted.substring(3);
+            }
+            if (formatted.length >= 8) {
+                formatted = formatted.substring(0, 8) + '-' + formatted.substring(8);
+            }
+            
+            return formatted;
+        }
 
         // 전화번호 정규화 함수
         function normalizePhone(phone) {
             return phone.replace(/[^0-9]/g, '');
         }
+
+        // 전화번호 입력 이벤트 처리
+        el('phone').addEventListener('input', (e) => {
+            const input = e.target;
+            const cursorPosition = input.selectionStart;
+            const oldValue = input.value;
+            const oldLength = oldValue.length;
+            
+            // 포맷팅 적용
+            const formatted = formatPhoneNumber(input.value);
+            input.value = formatted;
+            
+            // 커서 위치 조정
+            const newLength = formatted.length;
+            let newPosition = cursorPosition;
+            
+            // 하이픈이 추가된 경우 커서 위치 조정
+            if (newLength > oldLength) {
+                newPosition += newLength - oldLength;
+            } else if (newLength < oldLength) {
+                newPosition -= oldLength - newLength;
+            }
+            
+            input.setSelectionRange(newPosition, newPosition);
+        });
+
+        // 전화번호 입력 필드에서 숫자만 입력 가능하도록
+        el('phone').addEventListener('keypress', (e) => {
+            const char = String.fromCharCode(e.which);
+            if (!/[0-9]/.test(char)) {
+                e.preventDefault();
+            }
+        });
 
         // 앞에 대기 중인 인원 계산 함수
         async function computeAhead(programId, myEnqueuedAt) {
