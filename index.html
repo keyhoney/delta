@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>대구수학페스티벌 - Delta 부스 예약</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="logo">Δ</div>
+        <div>
+            <h1>대구수학페스티벌</h1>
+            <div class="small">송현여자고등학교 Delta 부스</div>
+        </div>
+    </header>
+
+    <div class="card">
+        <h2>체험 프로그램 예약</h2>
+        <div class="small">원하는 체험을 선택하고 인원 수를 입력해주세요</div>
+    </div>
+
+    <div class="card">
+        <h3>1) 체험 프로그램 선택</h3>
+        <div class="row">
+            <div>
+                <label>
+                    <input type="checkbox" id="chk-keyring"> 비즈 키링 만들기
+                </label>
+                <label>인원 수
+                    <input id="cnt-keyring" type="number" min="1" max="10" value="1" disabled>
+                </label>
+            </div>
+            <div>
+                <label>
+                    <input type="checkbox" id="chk-magnet"> 비즈 마그넷 만들기
+                </label>
+                <label>인원 수
+                    <input id="cnt-magnet" type="number" min="1" max="10" value="1" disabled>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>2) 연락처</h3>
+        <label>휴대폰 번호 (하이픈 없이)
+            <input id="phone" type="text" inputmode="numeric" placeholder="예: 01012345678" />
+        </label>
+        <div class="small">※ 같은 번호로 재예약하면 가장 최근 예약만 유효합니다.</div>
+    </div>
+
+    <div class="card">
+        <button class="primary" id="btn-reserve">예약 등록</button>
+        <a class="ghost" href="./waiting.html" style="margin-left:8px; text-decoration:none;">
+            <button class="ghost">내 대기 순번 확인하기</button>
+        </a>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+        import { getFirestore, collection, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+
+        // Firebase 설정 (인라인으로 포함)
+        const firebaseConfig = {
+            apiKey: "AIzaSyA_YlXZRedGE4dHiIwZ40yc8GDaCoen0Pc",
+            authDomain: "delta-3bf19.firebaseapp.com",
+            projectId: "delta-3bf19",
+            storageBucket: "delta-3bf19.firebasestorage.app",
+            messagingSenderId: "975459775271",
+            appId: "1:975459775271:web:87d105fecef201e2f96f02"
+        };
+
+        // Firebase 초기화
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const RES_COL = collection(db, 'reservations');
+
+        const el = id => document.getElementById(id);
+
+        // 체크박스 상태에 따라 인원 수 입력 활성화/비활성화
+        el('chk-keyring').addEventListener('change', (e) => {
+            el('cnt-keyring').disabled = !e.target.checked;
+            if (!e.target.checked) el('cnt-keyring').value = '1';
+        });
+
+        el('chk-magnet').addEventListener('change', (e) => {
+            el('cnt-magnet').disabled = !e.target.checked;
+            if (!e.target.checked) el('cnt-magnet').value = '1';
+        });
+
+        // 전화번호 정규화 함수
+        function normalizePhone(phone) {
+            return phone.replace(/[^0-9]/g, '');
+        }
+
+        document.getElementById('btn-reserve').addEventListener('click', async () => {
+            const selKeyring = el('chk-keyring').checked;
+            const selMagnet = el('chk-magnet').checked;
+            const cntKeyring = parseInt(el('cnt-keyring').value || '0', 10);
+            const cntMagnet = parseInt(el('cnt-magnet').value || '0', 10);
+            let phone = normalizePhone(el('phone').value);
+
+            // 유효성 검사
+            if (!selKeyring && !selMagnet) { 
+                alert('최소 하나의 체험을 선택해주세요.'); 
+                return; 
+            }
+            if (selKeyring && cntKeyring <= 0) { 
+                alert('키링 인원 수를 확인해주세요.'); 
+                return; 
+            }
+            if (selMagnet && cntMagnet <= 0) { 
+                alert('마그넷 인원 수를 확인해주세요.'); 
+                return; 
+            }
+            if (!/^01\d{8,9}$/.test(phone)) { 
+                alert('휴대폰 번호 형식을 확인해주세요.'); 
+                return; 
+            }
+
+            const payload = {
+                contact: phone,
+                createdAt: serverTimestamp(),
+                programs: {
+                    keyring: {
+                        selected: selKeyring,
+                        count: cntKeyring || 0,
+                        status: selKeyring ? 'pending' : 'off',
+                        enqueuedAt: selKeyring ? serverTimestamp() : null,
+                    },
+                    magnet: {
+                        selected: selMagnet,
+                        count: cntMagnet || 0,
+                        status: selMagnet ? 'pending' : 'off',
+                        enqueuedAt: selMagnet ? serverTimestamp() : null,
+                    }
+                }
+            };
+
+            try {
+                const docRef = await addDoc(RES_COL, payload);
+                alert('예약이 등록되었습니다! 대기 순번은 "내 대기 순번" 페이지에서 확인하세요.');
+                window.location.href = './waiting.html?phone=' + encodeURIComponent(phone);
+            } catch (e) {
+                console.error(e);
+                alert('예약 중 오류가 발생했습니다. 네트워크 상태를 확인해주세요.');
+            }
+        });
+    </script>
+</body>
+</html>

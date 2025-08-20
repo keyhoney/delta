@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>내 대기 순번 - 대구수학페스티벌</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="logo">Δ</div>
+        <div>
+            <h1>대구수학페스티벌</h1>
+            <div class="small">송현여자고등학교 Delta 부스</div>
+        </div>
+    </header>
+
+    <div class="card">
+        <h2>내 대기 순번</h2>
+        <div class="small">연락처로 조회합니다</div>
+    </div>
+
+    <div class="card">
+        <label>휴대폰 번호
+            <input id="phone" type="text" inputmode="numeric" placeholder="예: 01012345678" />
+        </label>
+        <button class="primary" id="btn-check">조회</button>
+        <a href="./index.html" style="margin-left:8px; text-decoration:none;">
+            <button class="ghost">예약하러 가기</button>
+        </a>
+    </div>
+
+    <div class="card" id="result" style="display:none"></div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+        import { getFirestore, collection, query, where, orderBy, limit, getDocs } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+
+        // Firebase 설정 (인라인으로 포함)
+        const firebaseConfig = {
+            apiKey: "AIzaSyA_YlXZRedGE4dHiIwZ40yc8GDaCoen0Pc",
+            authDomain: "delta-3bf19.firebaseapp.com",
+            projectId: "delta-3bf19",
+            storageBucket: "delta-3bf19.firebasestorage.app",
+            messagingSenderId: "975459775271",
+            appId: "1:975459775271:web:87d105fecef201e2f96f02"
+        };
+
+        // Firebase 초기화
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const RES_COL = collection(db, 'reservations');
+
+        const el = id => document.getElementById(id);
+
+        // URL 파라미터에서 전화번호 가져오기
+        function getParam(name) {
+            const url = new URL(location.href);
+            return url.searchParams.get(name);
+        }
+        const pre = getParam('phone');
+        if (pre) el('phone').value = pre;
+
+        // 전화번호 정규화 함수
+        function normalizePhone(phone) {
+            return phone.replace(/[^0-9]/g, '');
+        }
+
+        // 앞에 대기 중인 인원 계산 함수
+        async function computeAhead(programId, myEnqueuedAt) {
+            const q = query(
+                RES_COL,
+                where(`programs.${programId}.selected`, '==', true),
+                where(`programs.${programId}.status`, '==', 'pending'),
+                orderBy(`programs.${programId}.enqueuedAt`, 'asc')
+            );
+            const snap = await getDocs(q);
+            let teams = 0;
+            let people = 0;
+            snap.forEach(d => {
+                const r = d.data();
+                const p = r.programs?.[programId];
+                if (!p) return;
+                // 내 순번보다 앞선 것만 집계
+                if (p.enqueuedAt && myEnqueuedAt && 
+                    p.enqueuedAt.toMillis && myEnqueuedAt.toMillis && 
+                    p.enqueuedAt.toMillis() < myEnqueuedAt.toMillis()) {
+                    teams += 1;
+                    people += Number(p.count || 0);
+                }
+            });
+            return { teams, people };
+        }
+
+        document.getElementById('btn-check').addEventListener('click', async () => {
+            const phone = normalizePhone(el('phone').value);
+            if (!/^01\d{8,9}$/.test(phone)) { 
+                alert('휴대폰 번호 형식을 확인해주세요.'); 
+                return; 
+            }
+
+            // 같은 번호의 가장 최근 예약 1건만 사용
+            const q = query(RES_COL, where('contact', '==', phone), orderBy('createdAt', 'desc'), limit(1));
+            const snap = await getDocs(q);
+            if (snap.empty) { 
+                alert('예약 내역이 없습니다.'); 
+                return; 
+            }
+            const docData = snap.docs[0].data();
+
+            const PROGRAMS = {
+                keyring: { label: '비즈 키링' },
+                magnet: { label: '비즈 마그넷' }
+            };
+
+            const items = [];
+            for (const pid of Object.keys(PROGRAMS)) {
+                const p = docData.programs?.[pid];
+                if (!p || !p.selected) continue;
+                const ahead = await computeAhead(pid, p.enqueuedAt);
+                items.push({ 
+                    pid, 
+                    label: PROGRAMS[pid].label, 
+                    status: p.status, 
+                    count: p.count, 
+                    ahead 
+                });
+            }
+
+            const box = el('result');
+            if (items.length === 0) {
+                box.innerHTML = '<div>선택한 체험이 없습니다.</div>';
+            } else {
+                box.innerHTML = items.map(i => `
+                    <div style="margin-bottom:12px;">
+                        <div><span class="badge">${i.label}</span></div>
+                        <div style="margin-top:6px;">현재 상태: <b>${i.status === 'pending' ? '대기중' : (i.status === 'done' ? '체험 완료' : i.status)}</b></div>
+                        <div class="small">내 인원: ${i.count}명</div>
+                        ${i.status === 'pending' ? `<div style="margin-top:4px;">앞에 <b>${i.ahead.teams}</b>팀 / <b>${i.ahead.people}</b>명 대기중</div>` : ''}
+                    </div>
+                `).join('');
+            }
+            box.style.display = 'block';
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>관리자 페이지 - 대구수학페스티벌</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="logo">Δ</div>
+        <div>
+            <h1>대구수학페스티벌</h1>
+            <div class="small">송현여자고등학교 Delta 부스 - 관리자</div>
+        </div>
+    </header>
+
+    <div class="card">
+        <h2>예약 관리</h2>
+        <div class="small">체험 완료 및 보류 처리를 관리합니다</div>
+    </div>
+
+    <div class="row">
+        <div class="card">
+            <h3>비즈 키링</h3>
+            <div class="table-container">
+                <table class="table" id="table-keyring">
+                    <thead>
+                        <tr>
+                            <th>연락처</th>
+                            <th>인원</th>
+                            <th>상태</th>
+                            <th>작업</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>비즈 마그넷</h3>
+            <div class="table-container">
+                <table class="table" id="table-magnet">
+                    <thead>
+                        <tr>
+                            <th>연락처</th>
+                            <th>인원</th>
+                            <th>상태</th>
+                            <th>작업</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+        import { getFirestore, collection, query, where, orderBy, getDocs, doc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+
+        // Firebase 설정 (인라인으로 포함)
+        const firebaseConfig = {
+            apiKey: "AIzaSyA_YlXZRedGE4dHiIwZ40yc8GDaCoen0Pc",
+            authDomain: "delta-3bf19.firebaseapp.com",
+            projectId: "delta-3bf19",
+            storageBucket: "delta-3bf19.firebasestorage.app",
+            messagingSenderId: "975459775271",
+            appId: "1:975459775271:web:87d105fecef201e2f96f02"
+        };
+
+        // Firebase 초기화
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const RES_COL = collection(db, 'reservations');
+
+        const tbody = pid => document.querySelector(`#table-${pid} tbody`);
+
+        // 프로그램별 대기열 조회
+        async function listProgramQueue(programId) {
+            const q = query(
+                RES_COL,
+                where(`programs.${programId}.selected`, '==', true),
+                orderBy(`programs.${programId}.enqueuedAt`, 'asc')
+            );
+            const snap = await getDocs(q);
+            return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+
+        // 상태 변경
+        async function markStatus(docId, programId, status) {
+            const ref = doc(db, 'reservations', docId);
+            const payload = {};
+            payload[`programs.${programId}.status`] = status; // 'done' | 'pending'
+            if (status === 'pending') {
+                // 보류 취소(되돌리기) 시, 뒤로 미루지 않고 상태만 복구
+            }
+            await updateDoc(ref, payload);
+        }
+
+        // 뒤로 미루기
+        async function bumpToBack(docId, programId) {
+            const ref = doc(db, 'reservations', docId);
+            const payload = {};
+            payload[`programs.${programId}.enqueuedAt`] = serverTimestamp(); // 뒤로 미루기: 정렬키를 현재로 갱신
+            await updateDoc(ref, payload);
+        }
+
+        // 프로그램별 렌더링
+        async function renderProgram(pid) {
+            const rows = await listProgramQueue(pid);
+            const html = rows.map(r => {
+                const p = r.programs?.[pid];
+                const isDone = p.status === 'done';
+                return `
+                    <tr>
+                        <td class="${isDone ? 'strike' : ''}">${r.contact}</td>
+                        <td class="${isDone ? 'strike' : ''}">${p.count}</td>
+                        <td>${p.status}</td>
+                        <td>
+                            <button class="ghost" data-act="done" data-id="${r.id}" data-pid="${pid}">체험 완료</button>
+                            <button class="ghost" data-act="hold" data-id="${r.id}" data-pid="${pid}">보류(뒤로)</button>
+                            <button class="ghost" data-act="undo" data-id="${r.id}" data-pid="${pid}">완료 취소</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            tbody(pid).innerHTML = html || '<tr><td colspan="4" class="small">대기열이 없습니다.</td></tr>';
+        }
+
+        // 전체 새로고침
+        async function refreshAll() {
+            await renderProgram('keyring');
+            await renderProgram('magnet');
+        }
+
+        // 버튼 클릭 이벤트 처리
+        document.body.addEventListener('click', async (e) => {
+            const btn = e.target.closest('button[data-act]');
+            if (!btn) return;
+            
+            const act = btn.dataset.act;
+            const id = btn.dataset.id;
+            const pid = btn.dataset.pid;
+            
+            if (act === 'done') {
+                await markStatus(id, pid, 'done');
+            } else if (act === 'undo') {
+                await markStatus(id, pid, 'pending');
+            } else if (act === 'hold') {
+                await bumpToBack(id, pid);
+            }
+            
+            await refreshAll();
+        });
+
+        // 주기적으로 새로고침 (5초)
+        setInterval(refreshAll, 5000);
+        refreshAll();
+    </script>
+</body>
+</html>
