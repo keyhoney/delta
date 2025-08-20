@@ -206,7 +206,7 @@
                             <strong>현재 상태:</strong> 
                             <span class="status-${i.status}">${i.status === 'pending' ? '대기중' : (i.status === 'done' ? '체험 완료' : i.status)}</span>
                         </div>
-                        <div class="text-small" style="margin-bottom: var(--space-2);">내 인원: ${i.count}명</div>
+                        <div class="text-small" style="margin-bottom: var(--space-2);">체험 희망 신청 인원: ${i.count}명</div>
                         ${i.status === 'pending' ? `<div class="text-small" style="color: var(--warning-600); font-weight: 600;">앞에 <b>${i.ahead.teams}</b>팀 / <b>${i.ahead.people}</b>명 대기중</div>` : ''}
                         <div style="margin-top: var(--space-4);">
                             <button class="btn btn-secondary" data-action="cancel" data-doc-id="${snap.docs[0].id}" data-program-id="${i.pid}">

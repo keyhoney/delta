@@ -22,27 +22,37 @@
 
         <div class="card">
             <h2>체험 프로그램 예약</h2>
-            <div class="description">원하는 체험을 선택하고 인원 수를 입력해주세요</div>
         </div>
 
         <div class="card">
             <h3>1) 체험 프로그램 선택</h3>
+            <div class="description">원하는 체험을 선택하고 인원 수를 입력해주세요</div>
             <div class="row">
                 <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="chk-keyring"> 비즈 키링 만들기
-                    </label>
-                    <label>인원 수
-                        <input id="cnt-keyring" type="number" min="1" max="10" value="1" disabled>
-                    </label>
+                    <div class="program-item">
+                        <label>
+                            <input type="checkbox" id="chk-keyring"> 비즈 키링 만들기
+                        </label>
+                        <div class="program-image">
+                            <img src="keyring.jpg" alt="비즈 키링 예시" />
+                        </div>
+                        <label>체험 희망 인원 수 (최대 4명)
+                            <input id="cnt-keyring" type="number" min="1" max="4" value="1" disabled>
+                        </label>
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="chk-magnet"> 비즈 마그넷 만들기
-                    </label>
-                    <label>인원 수
-                        <input id="cnt-magnet" type="number" min="1" max="10" value="1" disabled>
-                    </label>
+                    <div class="program-item">
+                        <label>
+                            <input type="checkbox" id="chk-magnet"> 비즈 마그넷 만들기
+                        </label>
+                        <div class="program-image">
+                            <img src="magnet.jpg" alt="비즈 마그넷 예시" />
+                        </div>
+                        <label>체험 희망 인원 수 (최대 4명)
+                            <input id="cnt-magnet" type="number" min="1" max="4" value="1" disabled>
+                        </label>
+                    </div>
                 </div>
             </div>
         </div>
@@ -94,6 +104,23 @@
         el('chk-magnet').addEventListener('change', (e) => {
             el('cnt-magnet').disabled = !e.target.checked;
             if (!e.target.checked) el('cnt-magnet').value = '1';
+        });
+
+        // 인원 수 입력 제한 (최대 4명)
+        el('cnt-keyring').addEventListener('input', (e) => {
+            const value = parseInt(e.target.value);
+            if (value > 4) {
+                e.target.value = '4';
+                alert('키링 체험은 최대 4명까지 신청 가능합니다.');
+            }
+        });
+
+        el('cnt-magnet').addEventListener('input', (e) => {
+            const value = parseInt(e.target.value);
+            if (value > 4) {
+                e.target.value = '4';
+                alert('마그넷 체험은 최대 4명까지 신청 가능합니다.');
+            }
         });
 
         // 전화번호 포맷팅 함수
@@ -179,12 +206,12 @@
                 alert('최소 하나의 체험을 선택해주세요.'); 
                 return; 
             }
-            if (selKeyring && cntKeyring <= 0) { 
-                alert('키링 인원 수를 확인해주세요.'); 
+            if (selKeyring && (cntKeyring <= 0 || cntKeyring > 4)) { 
+                alert('키링 인원 수는 1명~4명 사이로 입력해주세요.'); 
                 return; 
             }
-            if (selMagnet && cntMagnet <= 0) { 
-                alert('마그넷 인원 수를 확인해주세요.'); 
+            if (selMagnet && (cntMagnet <= 0 || cntMagnet > 4)) { 
+                alert('마그넷 인원 수는 1명~4명 사이로 입력해주세요.'); 
                 return; 
             }
             if (!/^01\d{8,9}$/.test(phone)) { 
