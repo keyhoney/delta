@@ -5,56 +5,62 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>대구수학페스티벌 - Delta 부스 예약</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <header>
-        <div class="logo">Δ</div>
-        <div>
-            <h1>대구수학페스티벌</h1>
-            <div class="small">송현여자고등학교 Delta 부스</div>
-        </div>
-    </header>
-
-    <div class="card">
-        <h2>체험 프로그램 예약</h2>
-        <div class="small">원하는 체험을 선택하고 인원 수를 입력해주세요</div>
-    </div>
-
-    <div class="card">
-        <h3>1) 체험 프로그램 선택</h3>
-        <div class="row">
+    <div class="container">
+        <header>
+            <div class="logo">Δ</div>
             <div>
-                <label>
-                    <input type="checkbox" id="chk-keyring"> 비즈 키링 만들기
-                </label>
-                <label>인원 수
-                    <input id="cnt-keyring" type="number" min="1" max="10" value="1" disabled>
-                </label>
+                <h1>대구수학페스티벌</h1>
+                <div class="subtitle">송현여자고등학교 Delta 부스</div>
             </div>
-            <div>
-                <label>
-                    <input type="checkbox" id="chk-magnet"> 비즈 마그넷 만들기
-                </label>
-                <label>인원 수
-                    <input id="cnt-magnet" type="number" min="1" max="10" value="1" disabled>
-                </label>
+        </header>
+
+        <div class="card">
+            <h2>체험 프로그램 예약</h2>
+            <div class="description">원하는 체험을 선택하고 인원 수를 입력해주세요</div>
+        </div>
+
+        <div class="card">
+            <h3>1) 체험 프로그램 선택</h3>
+            <div class="row">
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="chk-keyring"> 비즈 키링 만들기
+                    </label>
+                    <label>인원 수
+                        <input id="cnt-keyring" type="number" min="1" max="10" value="1" disabled>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="chk-magnet"> 비즈 마그넷 만들기
+                    </label>
+                    <label>인원 수
+                        <input id="cnt-magnet" type="number" min="1" max="10" value="1" disabled>
+                    </label>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div class="card">
-        <h3>2) 연락처</h3>
-        <label>휴대폰 번호 (하이픈 없이)
-            <input id="phone" type="text" inputmode="numeric" placeholder="예: 01012345678" />
-        </label>
-        <div class="small">※ 같은 번호로 재예약하면 가장 최근 예약만 유효합니다.</div>
-    </div>
+        <div class="card">
+            <h3>2) 연락처</h3>
+            <div class="form-group">
+                <label>휴대폰 번호 (하이픈 없이)</label>
+                <input id="phone" type="tel" inputmode="numeric" placeholder="예: 01012345678" />
+            </div>
+            <div class="text-small">※ 같은 번호로 재예약하면 가장 최근 예약만 유효합니다.</div>
+        </div>
 
-    <div class="card">
-        <button class="primary" id="btn-reserve">예약 등록</button>
-        <a class="ghost" href="./waiting.html" style="margin-left:8px; text-decoration:none;">
-            <button class="ghost">내 대기 순번 확인하기</button>
-        </a>
+        <div class="card">
+            <button class="btn btn-primary" id="btn-reserve">예약 등록</button>
+            <a href="./waiting.html" style="margin-left: var(--space-3); text-decoration: none;">
+                <button class="btn btn-secondary">내 대기 순번 확인하기</button>
+            </a>
+        </div>
     </div>
 
     <script type="module">

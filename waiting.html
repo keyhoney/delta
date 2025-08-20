@@ -5,32 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>내 대기 순번 - 대구수학페스티벌</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <header>
-        <div class="logo">Δ</div>
-        <div>
-            <h1>대구수학페스티벌</h1>
-            <div class="small">송현여자고등학교 Delta 부스</div>
+    <div class="container">
+        <header>
+            <div class="logo">Δ</div>
+            <div>
+                <h1>대구수학페스티벌</h1>
+                <div class="subtitle">송현여자고등학교 Delta 부스</div>
+            </div>
+        </header>
+
+        <div class="card">
+            <h2>내 대기 순번</h2>
+            <div class="description">연락처로 조회합니다</div>
         </div>
-    </header>
 
-    <div class="card">
-        <h2>내 대기 순번</h2>
-        <div class="small">연락처로 조회합니다</div>
+        <div class="card">
+            <div class="form-group">
+                <label>휴대폰 번호</label>
+                <input id="phone" type="tel" inputmode="numeric" placeholder="예: 01012345678" />
+            </div>
+            <button class="btn btn-primary" id="btn-check">조회</button>
+            <a href="./index.html" style="margin-left: var(--space-3); text-decoration: none;">
+                <button class="btn btn-secondary">예약하러 가기</button>
+            </a>
+        </div>
+
+        <div class="card" id="result" style="display:none"></div>
     </div>
-
-    <div class="card">
-        <label>휴대폰 번호
-            <input id="phone" type="text" inputmode="numeric" placeholder="예: 01012345678" />
-        </label>
-        <button class="primary" id="btn-check">조회</button>
-        <a href="./index.html" style="margin-left:8px; text-decoration:none;">
-            <button class="ghost">예약하러 가기</button>
-        </a>
-    </div>
-
-    <div class="card" id="result" style="display:none"></div>
 
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
@@ -129,14 +135,17 @@
 
             const box = el('result');
             if (items.length === 0) {
-                box.innerHTML = '<div>선택한 체험이 없습니다.</div>';
+                box.innerHTML = '<div class="text-small">선택한 체험이 없습니다.</div>';
             } else {
                 box.innerHTML = items.map(i => `
-                    <div style="margin-bottom:12px;">
-                        <div><span class="badge">${i.label}</span></div>
-                        <div style="margin-top:6px;">현재 상태: <b>${i.status === 'pending' ? '대기중' : (i.status === 'done' ? '체험 완료' : i.status)}</b></div>
-                        <div class="small">내 인원: ${i.count}명</div>
-                        ${i.status === 'pending' ? `<div style="margin-top:4px;">앞에 <b>${i.ahead.teams}</b>팀 / <b>${i.ahead.people}</b>명 대기중</div>` : ''}
+                    <div style="margin-bottom: var(--space-6); padding: var(--space-4); background: rgba(59, 130, 246, 0.05); border-radius: var(--radius-lg); border-left: 4px solid var(--primary-500);">
+                        <div style="margin-bottom: var(--space-3);"><span class="badge">${i.label}</span></div>
+                        <div style="margin-bottom: var(--space-2);">
+                            <strong>현재 상태:</strong> 
+                            <span class="status-${i.status}">${i.status === 'pending' ? '대기중' : (i.status === 'done' ? '체험 완료' : i.status)}</span>
+                        </div>
+                        <div class="text-small" style="margin-bottom: var(--space-2);">내 인원: ${i.count}명</div>
+                        ${i.status === 'pending' ? `<div class="text-small" style="color: var(--warning-600); font-weight: 600;">앞에 <b>${i.ahead.teams}</b>팀 / <b>${i.ahead.people}</b>명 대기중</div>` : ''}
                     </div>
                 `).join('');
             }

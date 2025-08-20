@@ -5,53 +5,58 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>관리자 페이지 - 대구수학페스티벌</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <header>
-        <div class="logo">Δ</div>
-        <div>
-            <h1>대구수학페스티벌</h1>
-            <div class="small">송현여자고등학교 Delta 부스 - 관리자</div>
-        </div>
-    </header>
-
-    <div class="card">
-        <h2>예약 관리</h2>
-        <div class="small">체험 완료 및 보류 처리를 관리합니다</div>
-    </div>
-
-    <div class="row">
-        <div class="card">
-            <h3>비즈 키링</h3>
-            <div class="table-container">
-                <table class="table" id="table-keyring">
-                    <thead>
-                        <tr>
-                            <th>연락처</th>
-                            <th>인원</th>
-                            <th>상태</th>
-                            <th>작업</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
+    <div class="container">
+        <header>
+            <div class="logo">Δ</div>
+            <div>
+                <h1>대구수학페스티벌</h1>
+                <div class="subtitle">송현여자고등학교 Delta 부스 - 관리자</div>
             </div>
-        </div>
+        </header>
 
         <div class="card">
-            <h3>비즈 마그넷</h3>
-            <div class="table-container">
-                <table class="table" id="table-magnet">
-                    <thead>
-                        <tr>
-                            <th>연락처</th>
-                            <th>인원</th>
-                            <th>상태</th>
-                            <th>작업</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
+            <h2>예약 관리</h2>
+            <div class="description">체험 완료 및 보류 처리를 관리합니다</div>
+        </div>
+
+        <div class="row">
+            <div class="card">
+                <h3>비즈 키링</h3>
+                <div class="table-container">
+                    <table class="table" id="table-keyring">
+                        <thead>
+                            <tr>
+                                <th>연락처</th>
+                                <th>인원</th>
+                                <th>상태</th>
+                                <th>작업</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>비즈 마그넷</h3>
+                <div class="table-container">
+                    <table class="table" id="table-magnet">
+                        <thead>
+                            <tr>
+                                <th>연락처</th>
+                                <th>인원</th>
+                                <th>상태</th>
+                                <th>작업</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -117,11 +122,11 @@
                     <tr>
                         <td class="${isDone ? 'strike' : ''}">${r.contact}</td>
                         <td class="${isDone ? 'strike' : ''}">${p.count}</td>
-                        <td>${p.status}</td>
+                        <td><span class="status-${p.status}">${p.status === 'pending' ? '대기중' : (p.status === 'done' ? '완료' : p.status)}</span></td>
                         <td>
-                            <button class="ghost" data-act="done" data-id="${r.id}" data-pid="${pid}">체험 완료</button>
-                            <button class="ghost" data-act="hold" data-id="${r.id}" data-pid="${pid}">보류(뒤로)</button>
-                            <button class="ghost" data-act="undo" data-id="${r.id}" data-pid="${pid}">완료 취소</button>
+                            <button class="btn btn-secondary" data-act="done" data-id="${r.id}" data-pid="${pid}">체험 완료</button>
+                            <button class="btn btn-secondary" data-act="hold" data-id="${r.id}" data-pid="${pid}">보류(뒤로)</button>
+                            <button class="btn btn-secondary" data-act="undo" data-id="${r.id}" data-pid="${pid}">완료 취소</button>
                         </td>
                     </tr>
                 `;
