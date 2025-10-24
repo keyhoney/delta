@@ -21,8 +21,8 @@
         </header>
 
         <div class="card">
-            <h2>내 대기 순번</h2>
-            <div class="description">연락처로 조회합니다</div>
+            <h2>내 예약 확인</h2>
+            <div class="description">연락처로 예약 내역을 조회하고 수정할 수 있습니다</div>
         </div>
 
         <div class="card">
@@ -41,9 +41,9 @@
 
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
-        import { getFirestore, collection, query, where, orderBy, limit, getDocs, doc, deleteDoc } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+        import { getFirestore, collection, query, where, orderBy, getDocs, doc, deleteDoc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
 
-        // Firebase 설정 (인라인으로 포함)
+        // Firebase 설정
         const firebaseConfig = {
             apiKey: "AIzaSyA_YlXZRedGE4dHiIwZ40yc8GDaCoen0Pc",
             authDomain: "delta-3bf19.firebaseapp.com",
@@ -67,25 +67,18 @@
         }
         const pre = getParam('phone');
         if (pre) {
-            // URL 파라미터로 받은 전화번호를 포맷팅하여 설정
             el('phone').value = formatPhoneNumber(pre);
         }
 
         // 전화번호 포맷팅 함수
         function formatPhoneNumber(phone) {
-            // 숫자만 추출
             const numbers = phone.replace(/[^0-9]/g, '');
-            
-            // 010으로 시작하지 않으면 010 추가
             let formatted = numbers;
             if (!formatted.startsWith('010')) {
                 formatted = '010' + formatted;
             }
-            
-            // 11자리로 제한
             formatted = formatted.substring(0, 11);
             
-            // 하이픈 추가
             if (formatted.length >= 3) {
                 formatted = formatted.substring(0, 3) + '-' + formatted.substring(3);
             }
@@ -108,15 +101,12 @@
             const oldValue = input.value;
             const oldLength = oldValue.length;
             
-            // 포맷팅 적용
             const formatted = formatPhoneNumber(input.value);
             input.value = formatted;
             
-            // 커서 위치 조정
             const newLength = formatted.length;
             let newPosition = cursorPosition;
             
-            // 하이픈이 추가된 경우 커서 위치 조정
             if (newLength > oldLength) {
                 newPosition += newLength - oldLength;
             } else if (newLength < oldLength) {
@@ -126,7 +116,7 @@
             input.setSelectionRange(newPosition, newPosition);
         });
 
-        // 전화번호 입력 필드에서 숫자만 입력 가능하도록
+        // 숫자만 입력 가능
         el('phone').addEventListener('keypress', (e) => {
             const char = String.fromCharCode(e.which);
             if (!/[0-9]/.test(char)) {
@@ -134,32 +124,7 @@
             }
         });
 
-        // 앞에 대기 중인 인원 계산 함수
-        async function computeAhead(programId, myEnqueuedAt) {
-            const q = query(
-                RES_COL,
-                where(`programs.${programId}.selected`, '==', true),
-                where(`programs.${programId}.status`, '==', 'pending'),
-                orderBy(`programs.${programId}.enqueuedAt`, 'asc')
-            );
-            const snap = await getDocs(q);
-            let teams = 0;
-            let people = 0;
-            snap.forEach(d => {
-                const r = d.data();
-                const p = r.programs?.[programId];
-                if (!p) return;
-                // 내 순번보다 앞선 것만 집계
-                if (p.enqueuedAt && myEnqueuedAt && 
-                    p.enqueuedAt.toMillis && myEnqueuedAt.toMillis && 
-                    p.enqueuedAt.toMillis() < myEnqueuedAt.toMillis()) {
-                    teams += 1;
-                    people += Number(p.count || 0);
-                }
-            });
-            return { teams, people };
-        }
-
+        // 예약 조회 및 표시
         document.getElementById('btn-check').addEventListener('click', async () => {
             const phone = normalizePhone(el('phone').value);
             if (!/^01\d{8,9}$/.test(phone)) { 
@@ -167,90 +132,230 @@
                 return; 
             }
 
-            // 같은 번호의 가장 최근 예약 1건만 사용
-            const q = query(RES_COL, where('contact', '==', phone), orderBy('createdAt', 'desc'), limit(1));
-            const snap = await getDocs(q);
-            if (snap.empty) { 
-                alert('예약 내역이 없습니다.'); 
-                return; 
-            }
-            const docData = snap.docs[0].data();
+            try {
+                // 해당 전화번호의 모든 예약 조회
+                const q = query(RES_COL, where('contact', '==', phone), orderBy('createdAt', 'desc'));
+                const snap = await getDocs(q);
+                
+                if (snap.empty) { 
+                    alert('예약 내역이 없습니다.'); 
+                    return; 
+                }
 
-            const PROGRAMS = {
-                keyring: { label: '비즈 키링' },
-                magnet: { label: '비즈 마그넷' }
-            };
-
-            const items = [];
-            for (const pid of Object.keys(PROGRAMS)) {
-                const p = docData.programs?.[pid];
-                if (!p || !p.selected) continue;
-                const ahead = await computeAhead(pid, p.enqueuedAt);
-                items.push({ 
-                    pid, 
-                    label: PROGRAMS[pid].label, 
-                    status: p.status, 
-                    count: p.count, 
-                    ahead 
-                });
+                const reservations = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const box = el('result');
+                
+                if (reservations.length === 0) {
+                    box.innerHTML = '<div class="text-small">예약 내역이 없습니다.</div>';
+                } else {
+                    box.innerHTML = reservations.map(res => {
+                        const programLabel = res.programType === 'keyring' ? '비즈 키링' : '비즈 마그넷';
+                        const statusText = res.status === 'pending' ? '대기중' : 
+                                         res.status === 'done' ? '체험 완료' : 
+                                         res.status === 'cancelled' ? '취소됨' : 
+                                         res.status === 'noshow' ? '노쇼' : res.status;
+                        
+                        return `
+                            <div class="reservation-item">
+                                <div class="reservation-header">
+                                    <span class="badge">${programLabel}</span>
+                                    <span class="reservation-time">${res.timeSlot}</span>
+                                </div>
+                                <div class="reservation-details">
+                                    <div class="reservation-info">
+                                        <strong>상태:</strong> 
+                                        <span class="status-${res.status}">${statusText}</span>
+                                    </div>
+                                    <div class="reservation-info">
+                                        <strong>인원:</strong> ${res.count}명
+                                    </div>
+                                    <div class="reservation-info">
+                                        <strong>예약 시간:</strong> ${res.timeSlot}
+                                    </div>
+                                </div>
+                                <div class="reservation-actions">
+                                    ${res.status === 'pending' ? `
+                                        <button class="btn btn-secondary" data-action="edit" data-id="${res.id}">
+                                            수정하기
+                                        </button>
+                                        <button class="btn btn-secondary" data-action="cancel" data-id="${res.id}">
+                                            예약 취소
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+                box.style.display = 'block';
+                
+            } catch (error) {
+                console.error('예약 조회 중 오류:', error);
+                alert('예약 조회 중 오류가 발생했습니다. 다시 시도해주세요.');
             }
-
-            const box = el('result');
-            if (items.length === 0) {
-                box.innerHTML = '<div class="text-small">선택한 체험이 없습니다.</div>';
-            } else {
-                box.innerHTML = items.map(i => `
-                    <div style="margin-bottom: var(--space-6); padding: var(--space-4); background: rgba(59, 130, 246, 0.05); border-radius: var(--radius-lg); border-left: 4px solid var(--primary-500);">
-                        <div style="margin-bottom: var(--space-3);"><span class="badge">${i.label}</span></div>
-                        <div style="margin-bottom: var(--space-2);">
-                            <strong>현재 상태:</strong> 
-                            <span class="status-${i.status}">${i.status === 'pending' ? '대기중' : (i.status === 'done' ? '체험 완료' : i.status)}</span>
-                        </div>
-                        <div class="text-small" style="margin-bottom: var(--space-2);">체험 희망 신청 인원: ${i.count}명</div>
-                        ${i.status === 'pending' ? `<div class="text-small" style="color: var(--warning-600); font-weight: 600;">앞에 <b>${i.ahead.teams}</b>팀 / <b>${i.ahead.people}</b>명 대기중</div>` : ''}
-                        <div style="margin-top: var(--space-4);">
-                            <button class="btn btn-secondary" data-action="cancel" data-doc-id="${snap.docs[0].id}" data-program-id="${i.pid}">
-                                예약 취소
-                            </button>
-                        </div>
-                    </div>
-                `).join('');
-            }
-            box.style.display = 'block';
         });
 
-        // 예약 취소 기능
-        async function cancelReservation(docId, programId) {
+        // 예약 수정 모달
+        function showEditModal(reservation) {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.style.display = 'block';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h3>예약 수정</h3>
+                    <div class="form-group">
+                        <label>프로그램</label>
+                        <div class="text-small">${reservation.programType === 'keyring' ? '비즈 키링' : '비즈 마그넷'}</div>
+                    </div>
+                    <div class="form-group">
+                        <label>시간대</label>
+                        <select id="edit-timeSlot">
+                            <!-- 시간대 옵션이 여기에 동적으로 추가됩니다 -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>인원 수</label>
+                        <input id="edit-count" type="number" min="1" max="4" value="${reservation.count}" />
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" id="save-edit">저장</button>
+                        <button class="btn btn-secondary" id="cancel-edit">취소</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // 시간대 옵션 로드
+            loadTimeSlotOptions(reservation.programType, reservation.timeSlot);
+            
+            // 이벤트 리스너
+            document.getElementById('save-edit').addEventListener('click', async () => {
+                await saveReservationEdit(reservation.id, modal);
+            });
+            
+            document.getElementById('cancel-edit').addEventListener('click', () => {
+                document.body.removeChild(modal);
+            });
+        }
+
+        // 시간대 옵션 로드
+        async function loadTimeSlotOptions(programType, currentTimeSlot) {
+            try {
+                const q = query(RES_COL, where('programType', '==', programType));
+                const snap = await getDocs(q);
+                const reservations = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // 시간대별 예약 인원 계산
+                const slotCounts = {};
+                reservations.forEach(res => {
+                    if (res.status === 'pending') {
+                        slotCounts[res.timeSlot] = (slotCounts[res.timeSlot] || 0) + res.count;
+                    }
+                });
+                
+                // 시간대 옵션 생성
+                const timeSlots = generateTimeSlots();
+                const select = document.getElementById('edit-timeSlot');
+                select.innerHTML = timeSlots.map(slot => {
+                    const count = slotCounts[slot] || 0;
+                    const remaining = 4 - count;
+                    const isDisabled = remaining <= 0;
+                    const isCurrent = slot === currentTimeSlot;
+                    
+                    return `<option value="${slot}" ${isCurrent ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}>
+                        ${slot} ${isDisabled ? '(마감)' : `(${remaining}명 남음)`}
+                    </option>`;
+                }).join('');
+                
+            } catch (error) {
+                console.error('시간대 옵션 로드 중 오류:', error);
+            }
+        }
+
+        // 시간대 생성 함수
+        function generateTimeSlots() {
+            const slots = [];
+            for (let hour = 9; hour <= 17; hour++) {
+                for (let minute = 0; minute < 60; minute += 10) {
+                    if (hour === 17 && minute > 50) break;
+                    if (hour === 9 && minute < 30) continue;
+                    
+                    const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                    slots.push(timeString);
+                }
+            }
+            return slots;
+        }
+
+        // 예약 수정 저장
+        async function saveReservationEdit(reservationId, modal) {
+            const newTimeSlot = document.getElementById('edit-timeSlot').value;
+            const newCount = parseInt(document.getElementById('edit-count').value);
+            
+            if (!newTimeSlot || newCount <= 0) {
+                alert('모든 필드를 올바르게 입력해주세요.');
+                return;
+            }
+            
+            try {
+                const docRef = doc(db, 'reservations', reservationId);
+                await updateDoc(docRef, {
+                    timeSlot: newTimeSlot,
+                    count: newCount,
+                    updatedAt: serverTimestamp()
+                });
+                
+                alert('예약이 성공적으로 수정되었습니다.');
+                document.body.removeChild(modal);
+                
+                // 결과 새로고침
+                document.getElementById('btn-check').click();
+                
+            } catch (error) {
+                console.error('예약 수정 중 오류:', error);
+                alert('예약 수정 중 오류가 발생했습니다. 다시 시도해주세요.');
+            }
+        }
+
+        // 예약 취소
+        async function cancelReservation(reservationId) {
             if (!confirm('정말로 이 예약을 취소하시겠습니까?\n\n취소된 예약은 복구할 수 없습니다.')) {
                 return;
             }
 
             try {
-                // 전체 예약 문서를 삭제
-                const docRef = doc(db, 'reservations', docId);
-                await deleteDoc(docRef);
+                const docRef = doc(db, 'reservations', reservationId);
+                await updateDoc(docRef, {
+                    status: 'cancelled',
+                    cancelledAt: serverTimestamp()
+                });
                 
                 alert('예약이 성공적으로 취소되었습니다.');
                 
-                // 결과 화면 숨기기
-                document.getElementById('result').style.display = 'none';
-                
-                // 전화번호 입력 필드 초기화
-                document.getElementById('phone').value = '010-';
-                document.getElementById('phone').focus();
+                // 결과 새로고침
+                document.getElementById('btn-check').click();
                 
             } catch (error) {
-                console.error('예약 취소 중 오류 발생:', error);
+                console.error('예약 취소 중 오류:', error);
                 alert('예약 취소 중 오류가 발생했습니다. 다시 시도해주세요.');
             }
         }
 
-        // 취소 버튼 클릭 이벤트 처리
+        // 버튼 클릭 이벤트 처리
         document.addEventListener('click', async (e) => {
-            if (e.target.matches('[data-action="cancel"]')) {
-                const docId = e.target.dataset.docId;
-                const programId = e.target.dataset.programId;
-                await cancelReservation(docId, programId);
+            if (e.target.matches('[data-action="edit"]')) {
+                const reservationId = e.target.dataset.id;
+                // 예약 정보 조회 후 수정 모달 표시
+                const q = query(RES_COL, where('__name__', '==', reservationId));
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    const reservation = { id: snap.docs[0].id, ...snap.docs[0].data() };
+                    showEditModal(reservation);
+                }
+            } else if (e.target.matches('[data-action="cancel"]')) {
+                const reservationId = e.target.dataset.id;
+                await cancelReservation(reservationId);
             }
         });
     </script>

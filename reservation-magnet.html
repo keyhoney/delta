@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>비즈 마그넷 예약 - 대구수학페스티벌</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>Δ</text></svg>">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">Δ</div>
+            <div>
+                <h1>대구수학페스티벌</h1>
+                <div class="subtitle">송현여자고등학교 Delta 부스 - 비즈 마그넷 예약</div>
+            </div>
+        </header>
+
+        <div class="card">
+            <h2>비즈 마그넷 만들기 예약</h2>
+            <div class="description">원하는 시간대를 선택하고 인원 수를 입력해주세요</div>
+        </div>
+
+        <div class="card">
+            <h3>1) 시간대 선택</h3>
+            <div class="description">09:30부터 17:50까지 10분 단위로 예약 가능합니다</div>
+            
+            <!-- 스켈레톤 UI -->
+            <div id="skeleton-timeline" class="timeline-skeleton">
+                <div class="skeleton-row"></div>
+                <div class="skeleton-row"></div>
+                <div class="skeleton-row"></div>
+                <div class="skeleton-row"></div>
+                <div class="skeleton-row"></div>
+            </div>
+
+            <!-- 타임라인 UI -->
+            <div id="timeline" class="timeline" style="display: none;">
+                <!-- 시간대별 슬롯이 여기에 동적으로 생성됩니다 -->
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>2) 인원 수 선택</h3>
+            <div class="form-group">
+                <label>체험 희망 인원 수 (최대 4명)</label>
+                <input id="count" type="number" min="1" max="4" value="1" />
+                <div class="text-small">선택한 시간대의 잔여 인원: <span id="remaining-count">-</span>명</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>3) 연락처</h3>
+            <div class="form-group">
+                <label>휴대폰 번호</label>
+                <input id="phone" type="tel" inputmode="numeric" placeholder="010-0000-0000" value="010-" />
+            </div>
+            <div class="text-small">※ 같은 프로그램으로는 1회만 예약 가능합니다. 필요시 기존 예약을 취소 후 재예약해주세요.</div>
+        </div>
+
+        <div class="card">
+            <button class="btn btn-primary" id="btn-reserve" disabled>예약 등록</button>
+            <a href="./index.html" style="margin-left: var(--space-3); text-decoration: none;">
+                <button class="btn btn-secondary">돌아가기</button>
+            </a>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+        import { getFirestore, collection, addDoc, serverTimestamp, query, where, getDocs } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+
+        // Firebase 설정
+        const firebaseConfig = {
+            apiKey: "AIzaSyA_YlXZRedGE4dHiIwZ40yc8GDaCoen0Pc",
+            authDomain: "delta-3bf19.firebaseapp.com",
+            projectId: "delta-3bf19",
+            storageBucket: "delta-3bf19.firebasestorage.app",
+            messagingSenderId: "975459775271",
+            appId: "1:975459775271:web:87d105fecef201e2f96f02"
+        };
+
+        // Firebase 초기화
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const RES_COL = collection(db, 'reservations');
+
+        const el = id => document.getElementById(id);
+
+        // 캐시 관리
+        let cache = {
+            data: null,
+            timestamp: 0,
+            ttl: 10000 // 10초
+        };
+
+        // 시간대 생성 함수 (09:30 ~ 17:50, 10분 단위)
+        function generateTimeSlots() {
+            const slots = [];
+            for (let hour = 9; hour <= 17; hour++) {
+                for (let minute = 0; minute < 60; minute += 10) {
+                    if (hour === 17 && minute > 50) break;
+                    if (hour === 9 && minute < 30) continue;
+                    
+                    const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                    slots.push(timeString);
+                }
+            }
+            return slots;
+        }
+
+        // 현재 시간 기준으로 지난 시간대 필터링
+        function filterPastTimeSlots(timeSlots) {
+            const now = new Date();
+            const currentTime = `${now.getHours().toString().padStart(2, '0')}:${Math.floor(now.getMinutes() / 10) * 10}`;
+            return timeSlots.filter(slot => slot >= currentTime);
+        }
+
+        // 예약 현황 조회 (캐시 사용)
+        async function getReservationStatus() {
+            const now = Date.now();
+            
+            // 캐시가 유효한 경우 캐시 데이터 반환
+            if (cache.data && (now - cache.timestamp) < cache.ttl) {
+                return cache.data;
+            }
+
+            try {
+                const q = query(RES_COL, where('programType', '==', 'magnet'));
+                const snap = await getDocs(q);
+                const reservations = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // 캐시 업데이트
+                cache.data = reservations;
+                cache.timestamp = now;
+                
+                return reservations;
+            } catch (error) {
+                console.error('예약 현황 조회 중 오류:', error);
+                return [];
+            }
+        }
+
+        // 시간대별 예약 인원 계산
+        function calculateSlotCounts(reservations) {
+            const timeSlots = generateTimeSlots();
+            const slotCounts = {};
+            
+            timeSlots.forEach(slot => {
+                const slotReservations = reservations.filter(res => 
+                    res.timeSlot === slot && 
+                    res.status === 'pending'
+                );
+                slotCounts[slot] = slotReservations.reduce((sum, res) => sum + (res.count || 0), 0);
+            });
+            
+            return slotCounts;
+        }
+
+        // 예약 상태에 따른 색상 클래스 반환
+        function getSlotStatusClass(count) {
+            if (count >= 4) return 'slot-full';
+            if (count >= 3) return 'slot-almost-full';
+            if (count >= 2) return 'slot-moderate';
+            return 'slot-available';
+        }
+
+        // 예약 상태에 따른 텍스트 반환
+        function getSlotStatusText(count) {
+            const remaining = 4 - count;
+            if (remaining <= 0) return '마감';
+            if (remaining === 1) return '1명 남음';
+            return `${remaining}명 남음`;
+        }
+
+        // 타임라인 렌더링
+        async function renderTimeline() {
+            const reservations = await getReservationStatus();
+            const slotCounts = calculateSlotCounts(reservations);
+            const timeSlots = filterPastTimeSlots(generateTimeSlots());
+            
+            const timeline = el('timeline');
+            const skeleton = el('skeleton-timeline');
+            
+            // 스켈레톤 숨기기
+            skeleton.style.display = 'none';
+            timeline.style.display = 'block';
+            
+            timeline.innerHTML = timeSlots.map(slot => {
+                const count = slotCounts[slot] || 0;
+                const statusClass = getSlotStatusClass(count);
+                const statusText = getSlotStatusText(count);
+                const isDisabled = count >= 4;
+                
+                return `
+                    <div class="time-slot ${statusClass} ${isDisabled ? 'disabled' : ''}" 
+                         data-slot="${slot}" 
+                         data-count="${count}"
+                         ${isDisabled ? 'tabindex="-1"' : 'tabindex="0"'}
+                         role="button"
+                         aria-label="${slot} - ${statusText}">
+                        <div class="slot-time">${slot}</div>
+                        <div class="slot-status">${statusText}</div>
+                        <div class="slot-progress">
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${(count / 4) * 100}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 선택된 시간대 업데이트
+        function updateSelectedSlot() {
+            const selectedSlot = document.querySelector('.time-slot.selected');
+            const countInput = el('count');
+            const remainingCount = el('remaining-count');
+            const reserveBtn = el('btn-reserve');
+            
+            if (selectedSlot) {
+                const slot = selectedSlot.dataset.slot;
+                const currentCount = parseInt(selectedSlot.dataset.count) || 0;
+                const maxCount = 4 - currentCount;
+                
+                // 인원 수 입력 제한
+                countInput.max = maxCount;
+                if (parseInt(countInput.value) > maxCount) {
+                    countInput.value = maxCount;
+                }
+                
+                remainingCount.textContent = maxCount;
+                reserveBtn.disabled = false;
+            } else {
+                remainingCount.textContent = '-';
+                reserveBtn.disabled = true;
+            }
+        }
+
+        // 전화번호 포맷팅 함수
+        function formatPhoneNumber(phone) {
+            const numbers = phone.replace(/[^0-9]/g, '');
+            let formatted = numbers;
+            if (!formatted.startsWith('010')) {
+                formatted = '010' + formatted;
+            }
+            formatted = formatted.substring(0, 11);
+            
+            if (formatted.length >= 3) {
+                formatted = formatted.substring(0, 3) + '-' + formatted.substring(3);
+            }
+            if (formatted.length >= 8) {
+                formatted = formatted.substring(0, 8) + '-' + formatted.substring(8);
+            }
+            
+            return formatted;
+        }
+
+        // 전화번호 정규화 함수
+        function normalizePhone(phone) {
+            return phone.replace(/[^0-9]/g, '');
+        }
+
+        // 중복 예약 체크 함수
+        async function checkExistingReservation(phone) {
+            const normalizedPhone = normalizePhone(phone);
+            const q = query(RES_COL, 
+                where('contact', '==', normalizedPhone),
+                where('programType', '==', 'magnet'),
+                where('status', 'in', ['pending', 'done'])
+            );
+            const snap = await getDocs(q);
+            return !snap.empty;
+        }
+
+        // 이벤트 리스너 설정
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 타임라인 렌더링
+            await renderTimeline();
+            
+            // 시간대 선택 이벤트
+            document.addEventListener('click', (e) => {
+                const slot = e.target.closest('.time-slot:not(.disabled)');
+                if (slot) {
+                    // 기존 선택 해제
+                    document.querySelectorAll('.time-slot').forEach(s => s.classList.remove('selected'));
+                    // 새 선택
+                    slot.classList.add('selected');
+                    updateSelectedSlot();
+                }
+            });
+
+            // 키보드 네비게이션
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    const slot = e.target.closest('.time-slot:not(.disabled)');
+                    if (slot) {
+                        e.preventDefault();
+                        slot.click();
+                    }
+                }
+            });
+
+            // 인원 수 변경 이벤트
+            el('count').addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                const max = parseInt(e.target.max);
+                
+                if (value > max) {
+                    e.target.value = max;
+                    alert(`해당 시간대는 최대 ${max}명까지 예약 가능합니다.`);
+                }
+                updateSelectedSlot();
+            });
+
+            // 전화번호 입력 이벤트
+            el('phone').addEventListener('input', (e) => {
+                const input = e.target;
+                const cursorPosition = input.selectionStart;
+                const oldValue = input.value;
+                const oldLength = oldValue.length;
+                
+                const formatted = formatPhoneNumber(input.value);
+                input.value = formatted;
+                
+                const newLength = formatted.length;
+                let newPosition = cursorPosition;
+                
+                if (newLength > oldLength) {
+                    newPosition += newLength - oldLength;
+                } else if (newLength < oldLength) {
+                    newPosition -= oldLength - newLength;
+                }
+                
+                input.setSelectionRange(newPosition, newPosition);
+            });
+
+            // 숫자만 입력 가능
+            el('phone').addEventListener('keypress', (e) => {
+                const char = String.fromCharCode(e.which);
+                if (!/[0-9]/.test(char)) {
+                    e.preventDefault();
+                }
+            });
+
+            // 예약 등록 이벤트
+            el('btn-reserve').addEventListener('click', async () => {
+                const selectedSlot = document.querySelector('.time-slot.selected');
+                const count = parseInt(el('count').value);
+                const phone = normalizePhone(el('phone').value);
+
+                if (!selectedSlot) {
+                    alert('시간대를 선택해주세요.');
+                    return;
+                }
+
+                if (!/^01\d{8,9}$/.test(phone)) {
+                    alert('휴대폰 번호 형식을 확인해주세요.');
+                    return;
+                }
+
+                // 중복 예약 체크
+                const hasExistingReservation = await checkExistingReservation(phone);
+                if (hasExistingReservation) {
+                    alert('이미 마그넷 예약이 있습니다.\n\n같은 프로그램으로는 1회만 예약 가능합니다.\n필요시 기존 예약을 취소하고 재예약해주세요.');
+                    return;
+                }
+
+                const slot = selectedSlot.dataset.slot;
+                const currentCount = parseInt(selectedSlot.dataset.count) || 0;
+                
+                if (currentCount + count > 4) {
+                    alert('선택한 시간대의 잔여 인원이 부족합니다.');
+                    return;
+                }
+
+                const payload = {
+                    programType: 'magnet',
+                    timeSlot: slot,
+                    count: count,
+                    contact: phone,
+                    status: 'pending',
+                    createdAt: serverTimestamp()
+                };
+
+                try {
+                    const docRef = await addDoc(RES_COL, payload);
+                    alert(`예약이 등록되었습니다!\n\n프로그램: 비즈 마그넷\n시간: ${slot}\n인원: ${count}명\n\n예약 확인은 "내 예약 확인하기" 페이지에서 가능합니다.`);
+                    window.location.href = './waiting.html?phone=' + encodeURIComponent(phone);
+                } catch (e) {
+                    console.error(e);
+                    alert('예약 중 오류가 발생했습니다. 네트워크 상태를 확인해주세요.');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

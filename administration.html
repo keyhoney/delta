@@ -21,8 +21,8 @@
         </header>
 
         <div class="card">
-            <h2>예약 관리</h2>
-            <div class="description">체험 완료 및 보류 처리를 관리합니다</div>
+            <h2>예약 관리 시스템</h2>
+            <div class="description">시간대별 예약 현황을 조회하고 관리합니다</div>
         </div>
 
         <!-- 비밀번호 입력 모달 -->
@@ -41,39 +41,63 @@
         </div>
 
         <div id="mainContent" style="display: none;">
-            <div class="row">
-                <div class="card">
-                    <h3>비즈 키링</h3>
-                    <div class="table-container">
-                        <table class="table" id="table-keyring">
-                            <thead>
-                                <tr>
-                                    <th>연락처</th>
-                                    <th>인원</th>
-                                    <th>상태</th>
-                                    <th>작업</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
+            <!-- 통계 대시보드 -->
+            <div class="card">
+                <h3>통계 대시보드</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="total-reservations">-</div>
+                        <div class="stat-label">전체 예약</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="total-people">-</div>
+                        <div class="stat-label">총 인원</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="completed-count">-</div>
+                        <div class="stat-label">완료된 체험</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="pending-count">-</div>
+                        <div class="stat-label">대기 중</div>
                     </div>
                 </div>
+            </div>
 
-                <div class="card">
-                    <h3>비즈 마그넷</h3>
-                    <div class="table-container">
-                        <table class="table" id="table-magnet">
-                            <thead>
-                                <tr>
-                                    <th>연락처</th>
-                                    <th>인원</th>
-                                    <th>상태</th>
-                                    <th>작업</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
+            <!-- 프로그램 선택 -->
+            <div class="card">
+                <h3>프로그램 선택</h3>
+                <div class="program-tabs">
+                    <button class="tab-btn active" data-program="keyring">비즈 키링</button>
+                    <button class="tab-btn" data-program="magnet">비즈 마그넷</button>
+                </div>
+            </div>
+
+            <!-- 시간대별 현황 -->
+            <div class="card">
+                <h3>시간대별 예약 현황</h3>
+                <div class="time-slot-grid" id="timeSlotGrid">
+                    <!-- 시간대별 슬롯이 여기에 동적으로 생성됩니다 -->
+                </div>
+            </div>
+
+            <!-- 예약자 목록 -->
+            <div class="card">
+                <h3>예약자 목록</h3>
+                <div class="table-container">
+                    <table class="table" id="reservationsTable">
+                        <thead>
+                            <tr>
+                                <th>시간대</th>
+                                <th>연락처</th>
+                                <th>인원</th>
+                                <th>상태</th>
+                                <th>메모</th>
+                                <th>작업</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reservationsTableBody"></tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -83,7 +107,7 @@
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
         import { getFirestore, collection, query, where, orderBy, getDocs, doc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
 
-        // Firebase 설정 (인라인으로 포함)
+        // Firebase 설정
         const firebaseConfig = {
             apiKey: "AIzaSyA_YlXZRedGE4dHiIwZ40yc8GDaCoen0Pc",
             authDomain: "delta-3bf19.firebaseapp.com",
@@ -98,8 +122,10 @@
         const db = getFirestore(app);
         const RES_COL = collection(db, 'reservations');
 
-        const tbody = pid => document.querySelector(`#table-${pid} tbody`);
         let isAuthenticated = false;
+        let selectedProgram = 'keyring';
+        let allReservations = [];
+        let refreshInterval;
 
         // 비밀번호 인증
         function authenticate(password) {
@@ -115,8 +141,8 @@
                 isAuthenticated = true;
                 document.getElementById('passwordModal').style.display = 'none';
                 document.getElementById('mainContent').style.display = 'block';
-                refreshAll(); // 데이터 로드 시작
-                startAutoRefresh(); // 자동 새로고침 시작
+                loadData();
+                startAutoRefresh();
             } else {
                 errorDiv.style.display = 'block';
                 document.getElementById('adminPassword').value = '';
@@ -131,130 +157,271 @@
             }
         });
 
-        // 프로그램별 대기열 조회
-        async function listProgramQueue(programId) {
-            const q = query(
-                RES_COL,
-                where(`programs.${programId}.selected`, '==', true),
-                orderBy(`programs.${programId}.enqueuedAt`, 'asc')
-            );
-            const snap = await getDocs(q);
-            return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        }
-
-        // 상태 변경
-        async function markStatus(docId, programId, status) {
-            const ref = doc(db, 'reservations', docId);
-            const payload = {};
-            payload[`programs.${programId}.status`] = status; // 'done' | 'pending'
-            if (status === 'pending') {
-                // 보류 취소(되돌리기) 시, 뒤로 미루지 않고 상태만 복구
+        // 시간대 생성 함수
+        function generateTimeSlots() {
+            const slots = [];
+            for (let hour = 9; hour <= 17; hour++) {
+                for (let minute = 0; minute < 60; minute += 10) {
+                    if (hour === 17 && minute > 50) break;
+                    if (hour === 9 && minute < 30) continue;
+                    
+                    const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                    slots.push(timeString);
+                }
             }
-            await updateDoc(ref, payload);
+            return slots;
         }
 
-        // 뒤로 미루기 (한 순서만 뒤로)
-        async function bumpToBack(docId, programId) {
+        // 현재 시간대 찾기
+        function getCurrentTimeSlot() {
+            const now = new Date();
+            const currentTime = `${now.getHours().toString().padStart(2, '0')}:${Math.floor(now.getMinutes() / 10) * 10}`;
+            return currentTime;
+        }
+
+        // 데이터 로드
+        async function loadData() {
             try {
-                // 현재 대기열 조회
-                const queue = await listProgramQueue(programId);
+                const q = query(RES_COL, orderBy('createdAt', 'desc'));
+                const snap = await getDocs(q);
+                allReservations = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 
-                // 현재 항목 찾기
-                const currentIndex = queue.findIndex(item => item.id === docId);
-                if (currentIndex === -1) {
-                    alert('현재 항목을 찾을 수 없습니다.');
-                    return;
-                }
-                
-                // 마지막 항목이면 그대로 유지
-                if (currentIndex === queue.length - 1) {
-                    alert('이미 마지막 순서입니다.');
-                    return;
-                }
-                
-                // 바로 뒤 항목의 시간 가져오기
-                const nextItem = queue[currentIndex + 1];
-                const nextTime = nextItem.programs[programId].enqueuedAt;
-                
-                // 뒤 항목보다 1초 늦은 시간으로 설정
-                let newTime;
-                if (nextTime && nextTime.toMillis) {
-                    newTime = new Date(nextTime.toMillis() + 1000); // 1초 추가
-                } else {
-                    // 타임스탬프가 없는 경우 현재 시간 + 1초
-                    newTime = new Date(Date.now() + 1000);
-                }
-                
-                const ref = doc(db, 'reservations', docId);
-                const payload = {};
-                payload[`programs.${programId}.enqueuedAt`] = newTime;
-                await updateDoc(ref, payload);
+                updateStatistics();
+                updateTimeSlotGrid();
+                updateReservationsTable();
                 
             } catch (error) {
-                console.error('뒤로 미루기 중 오류 발생:', error);
-                alert('뒤로 미루기 중 오류가 발생했습니다.');
+                console.error('데이터 로드 중 오류:', error);
             }
         }
 
-        // 프로그램별 렌더링
-        async function renderProgram(pid) {
-            const rows = await listProgramQueue(pid);
-            const html = rows.map(r => {
-                const p = r.programs?.[pid];
-                const isDone = p.status === 'done';
+        // 통계 업데이트
+        function updateStatistics() {
+            const totalReservations = allReservations.length;
+            const totalPeople = allReservations.reduce((sum, res) => sum + (res.count || 0), 0);
+            const completedCount = allReservations.filter(res => res.status === 'done').length;
+            const pendingCount = allReservations.filter(res => res.status === 'pending').length;
+
+            document.getElementById('total-reservations').textContent = totalReservations;
+            document.getElementById('total-people').textContent = totalPeople;
+            document.getElementById('completed-count').textContent = completedCount;
+            document.getElementById('pending-count').textContent = pendingCount;
+        }
+
+        // 시간대별 그리드 업데이트
+        function updateTimeSlotGrid() {
+            const timeSlots = generateTimeSlots();
+            const currentTime = getCurrentTimeSlot();
+            const grid = document.getElementById('timeSlotGrid');
+            
+            grid.innerHTML = timeSlots.map(slot => {
+                const slotReservations = allReservations.filter(res => 
+                    res.programType === selectedProgram && 
+                    res.timeSlot === slot && 
+                    res.status === 'pending'
+                );
+                const count = slotReservations.reduce((sum, res) => sum + (res.count || 0), 0);
+                const isCurrent = slot === currentTime;
+                const isPast = slot < currentTime;
+                
+                let statusClass = 'slot-available';
+                if (count >= 4) statusClass = 'slot-full';
+                else if (count >= 3) statusClass = 'slot-almost-full';
+                else if (count >= 2) statusClass = 'slot-moderate';
+                
+                return `
+                    <div class="time-slot-admin ${statusClass} ${isCurrent ? 'current' : ''} ${isPast ? 'past' : ''}" 
+                         data-slot="${slot}" 
+                         data-count="${count}">
+                        <div class="slot-time">${slot}</div>
+                        <div class="slot-count">${count}/4명</div>
+                        ${isCurrent ? '<div class="current-indicator">현재</div>' : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 예약자 목록 업데이트
+        function updateReservationsTable() {
+            const programReservations = allReservations.filter(res => res.programType === selectedProgram);
+            const tbody = document.getElementById('reservationsTableBody');
+            
+            if (programReservations.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">예약이 없습니다.</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = programReservations.map(res => {
+                const statusText = res.status === 'pending' ? '대기중' : 
+                                 res.status === 'done' ? '완료' : 
+                                 res.status === 'cancelled' ? '취소됨' : 
+                                 res.status === 'noshow' ? '노쇼' : res.status;
+                
                 return `
                     <tr>
-                        <td class="${isDone ? 'strike' : ''}">${r.contact}</td>
-                        <td class="${isDone ? 'strike' : ''}">${p.count}</td>
-                        <td><span class="status-${p.status}">${p.status === 'pending' ? '대기중' : (p.status === 'done' ? '완료' : p.status)}</span></td>
+                        <td>${res.timeSlot}</td>
+                        <td>${res.contact}</td>
+                        <td>${res.count}명</td>
+                        <td><span class="status-${res.status}">${statusText}</span></td>
                         <td>
-                            <button class="btn btn-secondary" data-act="done" data-id="${r.id}" data-pid="${pid}">체험 완료</button>
-                            <button class="btn btn-secondary" data-act="hold" data-id="${r.id}" data-pid="${pid}">한 순서 뒤로</button>
-                            <button class="btn btn-secondary" data-act="undo" data-id="${r.id}" data-pid="${pid}">완료 취소</button>
+                            <input type="text" class="admin-note" data-id="${res.id}" 
+                                   value="${res.adminNote || ''}" placeholder="메모 입력" />
+                        </td>
+                        <td>
+                            ${res.status === 'pending' ? `
+                                <button class="btn btn-secondary" data-action="complete" data-id="${res.id}">
+                                    완료
+                                </button>
+                                <button class="btn btn-secondary" data-action="noshow" data-id="${res.id}">
+                                    노쇼
+                                </button>
+                            ` : res.status === 'done' ? `
+                                <button class="btn btn-secondary" data-action="undo" data-id="${res.id}">
+                                    되돌리기
+                                </button>
+                            ` : ''}
                         </td>
                     </tr>
                 `;
             }).join('');
-            tbody(pid).innerHTML = html || '<tr><td colspan="4" class="small">대기열이 없습니다.</td></tr>';
         }
 
-        // 전체 새로고침
-        async function refreshAll() {
-            await renderProgram('keyring');
-            await renderProgram('magnet');
+        // 상태 변경
+        async function updateReservationStatus(reservationId, status) {
+            try {
+                const docRef = doc(db, 'reservations', reservationId);
+                await updateDoc(docRef, {
+                    status: status,
+                    updatedAt: serverTimestamp()
+                });
+                
+                // 로컬 데이터 업데이트
+                const index = allReservations.findIndex(res => res.id === reservationId);
+                if (index !== -1) {
+                    allReservations[index].status = status;
+                }
+                
+                updateStatistics();
+                updateTimeSlotGrid();
+                updateReservationsTable();
+                
+            } catch (error) {
+                console.error('상태 변경 중 오류:', error);
+                alert('상태 변경 중 오류가 발생했습니다.');
+            }
         }
 
-        // 버튼 클릭 이벤트 처리
-        document.body.addEventListener('click', async (e) => {
-            const btn = e.target.closest('button[data-act]');
-            if (!btn) return;
-            
-            // 인증 체크
-            if (!isAuthenticated) {
-                alert('관리자 인증이 필요합니다.');
-                return;
+        // 메모 저장
+        async function saveAdminNote(reservationId, note) {
+            try {
+                const docRef = doc(db, 'reservations', reservationId);
+                await updateDoc(docRef, {
+                    adminNote: note,
+                    updatedAt: serverTimestamp()
+                });
+                
+                // 로컬 데이터 업데이트
+                const index = allReservations.findIndex(res => res.id === reservationId);
+                if (index !== -1) {
+                    allReservations[index].adminNote = note;
+                }
+                
+            } catch (error) {
+                console.error('메모 저장 중 오류:', error);
             }
-            
-            const act = btn.dataset.act;
-            const id = btn.dataset.id;
-            const pid = btn.dataset.pid;
-            
-            if (act === 'done') {
-                await markStatus(id, pid, 'done');
-            } else if (act === 'undo') {
-                await markStatus(id, pid, 'pending');
-            } else if (act === 'hold') {
-                await bumpToBack(id, pid);
-            }
-            
-            await refreshAll();
+        }
+
+        // 이벤트 리스너 설정
+        document.addEventListener('DOMContentLoaded', () => {
+            // 프로그램 탭 클릭
+            document.addEventListener('click', (e) => {
+                if (e.target.matches('.tab-btn')) {
+                    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+                    selectedProgram = e.target.dataset.program;
+                    updateTimeSlotGrid();
+                    updateReservationsTable();
+                }
+            });
+
+            // 시간대 슬롯 클릭
+            document.addEventListener('click', (e) => {
+                if (e.target.matches('.time-slot-admin')) {
+                    const slot = e.target.dataset.slot;
+                    // 해당 시간대의 예약만 필터링하여 표시
+                    const slotReservations = allReservations.filter(res => 
+                        res.programType === selectedProgram && 
+                        res.timeSlot === slot
+                    );
+                    
+                    if (slotReservations.length > 0) {
+                        // 시간대별 예약자 목록 표시 (모달 또는 별도 섹션)
+                        showSlotReservations(slot, slotReservations);
+                    }
+                }
+            });
+
+            // 예약자 목록 액션
+            document.addEventListener('click', async (e) => {
+                if (e.target.matches('[data-action]')) {
+                    const action = e.target.dataset.action;
+                    const reservationId = e.target.dataset.id;
+                    
+                    if (action === 'complete') {
+                        await updateReservationStatus(reservationId, 'done');
+                    } else if (action === 'noshow') {
+                        await updateReservationStatus(reservationId, 'noshow');
+                    } else if (action === 'undo') {
+                        await updateReservationStatus(reservationId, 'pending');
+                    }
+                }
+            });
+
+            // 메모 저장
+            document.addEventListener('input', async (e) => {
+                if (e.target.matches('.admin-note')) {
+                    const reservationId = e.target.dataset.id;
+                    const note = e.target.value;
+                    await saveAdminNote(reservationId, note);
+                }
+            });
         });
 
-        // 주기적으로 새로고침 (5초) - 인증 후에만 시작
-        let refreshInterval;
-        
+        // 시간대별 예약자 표시
+        function showSlotReservations(slot, reservations) {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.style.display = 'block';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h3>${slot} 예약자 목록</h3>
+                    <div class="slot-reservations">
+                        ${reservations.map(res => `
+                            <div class="reservation-item">
+                                <div class="reservation-info">
+                                    <strong>연락처:</strong> ${res.contact}<br>
+                                    <strong>인원:</strong> ${res.count}명<br>
+                                    <strong>상태:</strong> <span class="status-${res.status}">${res.status === 'pending' ? '대기중' : res.status === 'done' ? '완료' : res.status}</span>
+                                </div>
+                                <div class="reservation-actions">
+                                    ${res.status === 'pending' ? `
+                                        <button class="btn btn-secondary" data-action="complete" data-id="${res.id}">완료</button>
+                                        <button class="btn btn-secondary" data-action="noshow" data-id="${res.id}">노쇼</button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button class="btn btn-primary" onclick="this.closest('.modal').remove()">닫기</button>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+
+        // 자동 새로고침
         function startAutoRefresh() {
-            refreshInterval = setInterval(refreshAll, 5000);
+            refreshInterval = setInterval(loadData, 10000); // 10초마다
         }
         
         function stopAutoRefresh() {
