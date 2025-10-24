@@ -280,6 +280,16 @@ header .subtitle {
    transition: var(--transition-normal);
  }
 
+ /* 모바일에서 프로그램 카드 레이아웃 조정 */
+ @media (max-width: 768px) {
+   .program-card {
+     flex-direction: column;
+     text-align: center;
+     gap: var(--space-4);
+     padding: var(--space-3);
+   }
+ }
+
  .program-card:hover {
    background: rgba(255, 255, 255, 0.8);
    transform: translateY(-2px);
@@ -300,6 +310,15 @@ header .subtitle {
    box-shadow: var(--shadow-md);
    transition: var(--transition-normal);
    border: 2px solid var(--gray-200);
+ }
+
+ /* 모바일에서 이미지 크기 제한 */
+ @media (max-width: 768px) {
+   .program-image img {
+     max-width: 120px;
+     max-height: 120px;
+     object-fit: cover;
+   }
  }
 
  .program-image img:hover {
@@ -1122,7 +1141,9 @@ button.ghost:hover {
    }
    
    .program-image img {
-     max-width: 90%;
+     max-width: 120px;
+     max-height: 120px;
+     object-fit: cover;
    }
  }
 
