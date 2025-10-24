@@ -299,6 +299,31 @@
             }
             
             try {
+                // 🔥 핵심: 해당 시간대의 현재 예약 현황 조회
+                const q = query(RES_COL, 
+                    where('programType', '==', programType),
+                    where('timeSlot', '==', newTimeSlot),
+                    where('status', '==', 'pending')
+                );
+                const snap = await getDocs(q);
+                const currentReservations = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // 현재 예약된 총 인원 계산
+                const currentTotal = currentReservations.reduce((sum, res) => sum + (res.count || 0), 0);
+                
+                // 내 예약을 제외한 인원 계산
+                const otherReservations = currentReservations.filter(res => res.id !== reservationId);
+                const otherTotal = otherReservations.reduce((sum, res) => sum + (res.count || 0), 0);
+                
+                // 잔여 인원 확인
+                const remainingSlots = 4 - otherTotal;
+                
+                if (newCount > remainingSlots) {
+                    alert(`해당 시간대는 최대 ${remainingSlots}명까지 예약 가능합니다.\n현재 다른 예약: ${otherTotal}명`);
+                    return;
+                }
+                
+                // 수정 진행
                 const docRef = doc(db, 'reservations', reservationId);
                 await updateDoc(docRef, {
                     timeSlot: newTimeSlot,

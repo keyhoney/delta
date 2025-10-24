@@ -336,9 +336,9 @@ header .subtitle {
 
 /* Timeline Styles */
 .timeline {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
-  gap: var(--space-2);
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)) !important;
+  gap: var(--space-2) !important;
   margin-top: var(--space-4);
 }
 
@@ -346,7 +346,7 @@ header .subtitle {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: var(--space-3);
+  padding: var(--space-2);
   border: 2px solid var(--gray-200);
   border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.8);
@@ -442,9 +442,9 @@ header .subtitle {
 
 /* Skeleton UI */
 .timeline-skeleton {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
-  gap: var(--space-2);
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)) !important;
+  gap: var(--space-2) !important;
   margin-top: var(--space-4);
 }
 
@@ -1220,6 +1220,10 @@ button.ghost:hover {
   justify-content: center;
   z-index: 1000;
   padding: var(--space-4);
+}
+
+.modal[style*="display: block"] {
+  display: flex !important;
 }
 
 .modal-content {

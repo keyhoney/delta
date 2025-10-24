@@ -188,7 +188,9 @@
             
             // 스켈레톤 숨기기
             skeleton.style.display = 'none';
+            skeleton.style.visibility = 'hidden';
             timeline.style.display = 'block';
+            timeline.style.visibility = 'visible';
             
             timeline.innerHTML = timeSlots.map(slot => {
                 const count = slotCounts[slot] || 0;

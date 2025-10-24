@@ -91,9 +91,6 @@
                                 <th>시간대</th>
                                 <th>연락처</th>
                                 <th>인원</th>
-                                <th>상태</th>
-                                <th>메모</th>
-                                <th>작업</th>
                             </tr>
                         </thead>
                         <tbody id="reservationsTableBody"></tbody>
@@ -247,40 +244,21 @@
             const tbody = document.getElementById('reservationsTableBody');
             
             if (programReservations.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center">예약이 없습니다.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center">예약이 없습니다.</td></tr>';
                 return;
             }
             
-            tbody.innerHTML = programReservations.map(res => {
-                const statusText = res.status === 'pending' ? '대기중' : 
-                                 res.status === 'done' ? '완료' : 
-                                 res.status === 'cancelled' ? '취소됨' : 
-                                 res.status === 'noshow' ? '노쇼' : res.status;
-                
+            // 시간대별로 정렬 (늦은 시간이 위에)
+            const sortedReservations = programReservations.sort((a, b) => {
+                return b.timeSlot.localeCompare(a.timeSlot);
+            });
+            
+            tbody.innerHTML = sortedReservations.map(res => {
                 return `
                     <tr>
                         <td>${res.timeSlot}</td>
                         <td>${res.contact}</td>
                         <td>${res.count}명</td>
-                        <td><span class="status-${res.status}">${statusText}</span></td>
-                        <td>
-                            <input type="text" class="admin-note" data-id="${res.id}" 
-                                   value="${res.adminNote || ''}" placeholder="메모 입력" />
-                        </td>
-                        <td>
-                            ${res.status === 'pending' ? `
-                                <button class="btn btn-secondary" data-action="complete" data-id="${res.id}">
-                                    완료
-                                </button>
-                                <button class="btn btn-secondary" data-action="noshow" data-id="${res.id}">
-                                    노쇼
-                                </button>
-                            ` : res.status === 'done' ? `
-                                <button class="btn btn-secondary" data-action="undo" data-id="${res.id}">
-                                    되돌리기
-                                </button>
-                            ` : ''}
-                        </td>
                     </tr>
                 `;
             }).join('');
@@ -361,30 +339,7 @@
                 }
             });
 
-            // 예약자 목록 액션
-            document.addEventListener('click', async (e) => {
-                if (e.target.matches('[data-action]')) {
-                    const action = e.target.dataset.action;
-                    const reservationId = e.target.dataset.id;
-                    
-                    if (action === 'complete') {
-                        await updateReservationStatus(reservationId, 'done');
-                    } else if (action === 'noshow') {
-                        await updateReservationStatus(reservationId, 'noshow');
-                    } else if (action === 'undo') {
-                        await updateReservationStatus(reservationId, 'pending');
-                    }
-                }
-            });
-
-            // 메모 저장
-            document.addEventListener('input', async (e) => {
-                if (e.target.matches('.admin-note')) {
-                    const reservationId = e.target.dataset.id;
-                    const note = e.target.value;
-                    await saveAdminNote(reservationId, note);
-                }
-            });
+            // 이벤트 리스너는 시간대 슬롯 클릭만 유지
         });
 
         // 시간대별 예약자 표시
@@ -400,14 +355,7 @@
                             <div class="reservation-item">
                                 <div class="reservation-info">
                                     <strong>연락처:</strong> ${res.contact}<br>
-                                    <strong>인원:</strong> ${res.count}명<br>
-                                    <strong>상태:</strong> <span class="status-${res.status}">${res.status === 'pending' ? '대기중' : res.status === 'done' ? '완료' : res.status}</span>
-                                </div>
-                                <div class="reservation-actions">
-                                    ${res.status === 'pending' ? `
-                                        <button class="btn btn-secondary" data-action="complete" data-id="${res.id}">완료</button>
-                                        <button class="btn btn-secondary" data-action="noshow" data-id="${res.id}">노쇼</button>
-                                    ` : ''}
+                                    <strong>인원:</strong> ${res.count}명
                                 </div>
                             </div>
                         `).join('')}
