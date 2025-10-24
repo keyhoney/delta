@@ -186,9 +186,8 @@
             const timeline = el('timeline');
             const skeleton = el('skeleton-timeline');
             
-            // 스켈레톤 숨기기
-            skeleton.style.display = 'none';
-            skeleton.style.visibility = 'hidden';
+            // 스켈레톤 제거 및 타임라인 표시
+            skeleton.remove();
             timeline.style.display = 'block';
             timeline.style.visibility = 'visible';
             
